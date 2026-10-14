@@ -24,6 +24,11 @@ Runs entirely in the browser (GitHub Pages). Your own data is stored in OneDrive
    If the address ever changes, add the new one under *Authentication* in that registration.
 4. Open the app and choose **Sign in with Microsoft**.
 
+## Home screen and sign-in
+
+- **Home** (top right) returns to the home dashboard. When the app is open inside the dashboard it closes the app view, like the dashboard's own Menu button; opened on its own it goes to `https://mkirsten583.github.io/home-dashboard/`.
+- Sign-in is remembered in the browser. Inside the dashboard, Microsoft's sign-in page can't load in the embedded view, so **Sign in with Microsoft** opens a small pop-up window instead (allow pop-ups for mkirsten583.github.io if the browser asks). If the sign-in ever needs renewing while embedded, the status line shows **Sign in again** rather than leaving the page.
+
 ## Where your data goes
 
 On first save the app creates a folder in your OneDrive:

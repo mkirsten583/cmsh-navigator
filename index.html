@@ -16,6 +16,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
 html, body { margin: 0; } [hidden] { display: none !important; }
+html.embedded .brand { padding-left: 96px; }
 :root { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
 /* Layout: an instrument-panel search bar over a two-pane reader (results | provision), with Map, Library and Saved as sibling tabs. */
 :root {
@@ -73,7 +74,7 @@ a { color: var(--t-act); }
 .qbox svg { flex: none; color: var(--muted); }
 #q { flex: 1; min-width: 0; border: 0; background: transparent; padding: 11px 8px; font-size: 15px; outline: none; }
 .sel { border: 1px solid var(--line-strong); background: var(--raised); border-radius: var(--r); padding: 0 8px; height: 42px; max-width: 100%; min-width: 0; width: 230px; }
-.btn { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line-strong); background: var(--surface); border-radius: var(--r); padding: 7px 12px; cursor: pointer; font-weight: 500; white-space: nowrap; }
+.btn { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; border: 1px solid var(--line-strong); background: var(--surface); border-radius: var(--r); padding: 7px 12px; cursor: pointer; font-weight: 500; white-space: nowrap; }
 .btn:hover { border-color: var(--ink); }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .btn.primary:hover { filter: brightness(1.05); }
@@ -231,7 +232,7 @@ tr:last-child td { border-bottom: 0; }
     <div class="brand">
       <h1>CMSH Navigator</h1>
       <span class="sub">Queensland coal mining legislation, recognised standards and guidance</span>
-      <span class="status" id="status"><span class="dot" id="dbdot"></span><span id="dbtxt">Loading…</span><button class="btn sm" id="authbtn" hidden></button></span>
+      <span class="status" id="status"><span class="dot" id="dbdot"></span><span id="dbtxt">Loading…</span><button class="btn sm" id="authbtn" hidden></button><a class="btn sm" id="homebtn" href="https://mkirsten583.github.io/home-dashboard/" target="_top" title="Back to the home screen">&#8962; Home</a></span>
     </div>
     <form class="qrow" id="qform" autocomplete="off">
       <label class="qbox" for="q">
@@ -278,6 +279,9 @@ tr:last-child td { border-bottom: 0; }
 <script>
 (() => {
 'use strict';
+// This page is also the landing page for the Microsoft sign-in pop-up. In that window, do nothing:
+// the main window reads the result and closes it.
+if (window.opener && window.opener !== window && /[#&](code|error)=/.test(location.hash)) { document.body.innerHTML = '<p style="font:16px system-ui;padding:24px">Signing in…</p>'; return; }
 /* ================= state ================= */
 const S = {
   base: null,            // docs.json
@@ -1017,6 +1021,12 @@ async function putSearch(rec) { commit({ type: 'search', rec: JSON.parse(JSON.st
 async function delSearch(id) { commit({ type: 'delsearch', id }); }
 
 /* ----- auth ----- */
+const HOME_URL = 'https://mkirsten583.github.io/home-dashboard/';
+// Inside the home dashboard the app runs in a frame. Microsoft's sign-in page refuses to load in a frame,
+// so there we sign in through a pop-up window instead of redirecting the frame.
+const EMBEDDED = (() => { try { return window.self !== window.top; } catch (e) { return true; } })();
+if (EMBEDDED) document.documentElement.classList.add('embedded');
+let needsSignIn = false;
 function redirectUri() { return location.origin + location.pathname.replace(/index\.html$/, ''); }
 async function initAuth() {
   if (!window.msal) throw new Error('The Microsoft sign-in library did not load. Check your internet connection and reload.');
@@ -1030,7 +1040,21 @@ async function initAuth() {
   account = msalApp.getActiveAccount() || msalApp.getAllAccounts()[0] || null;
   if (account) msalApp.setActiveAccount(account);
 }
-function signIn() { msalApp.loginRedirect({ scopes: SCOPES, prompt: 'select_account' }); }
+async function signIn() {
+  const again = !!(account && needsSignIn);
+  const req = again ? { scopes: SCOPES, account } : { scopes: SCOPES, prompt: 'select_account' };
+  if (!EMBEDDED) return again ? msalApp.acquireTokenRedirect(req) : msalApp.loginRedirect(req);
+  try {
+    setStoreStatus('Complete the sign-in in the pop-up window…');
+    const r = again ? await msalApp.acquireTokenPopup(req) : await msalApp.loginPopup(req);
+    account = r.account || account; msalApp.setActiveAccount(account); needsSignIn = false;
+    await startSync();
+  } catch (e) {
+    console.error(e);
+    const code = (e && (e.errorCode || e.message)) || '';
+    setStoreStatus(/popup_window_error|empty_window|blocked/i.test(code) ? 'The sign-in window was blocked — allow pop-ups for this site and try again' : /user_cancelled/i.test(code) ? undefined : 'Sign-in did not finish — try again');
+  }
+}
 async function signOut() { await msalApp.logoutRedirect({ account }); }
 async function getToken() {
   if (!account) throw new Error('Not signed in');
@@ -1038,6 +1062,11 @@ async function getToken() {
   catch (e) {
     const code = (e && (e.errorCode || e.name)) || '';
     if (e instanceof msal.InteractionRequiredAuthError || /interaction_required|login_required|consent_required|no_tokens_found|monitor_window_timeout/.test(code)) {
+      if (EMBEDDED) {
+        // A redirect can't work inside the dashboard frame: ask for a tap instead (opens a pop-up).
+        needsSignIn = true; setStoreStatus();
+        const err = new Error('Sign in again to sync with OneDrive'); err.needsSignIn = true; throw err;
+      }
       setStoreStatus('Session expired — signing in again…');
       await msalApp.acquireTokenRedirect({ scopes: SCOPES, account });
       return new Promise(() => { });
@@ -1113,6 +1142,7 @@ async function saveNow() {
     if (pendingOps.length) saveAgain = true; else { syncState = 'synced'; setStoreStatus(); }
   } catch (e) {
     console.error(e);
+    if (e.needsSignIn) { saving = false; return; }
     syncState = 'error';
     setStoreStatus((navigator.onLine === false ? 'Offline' : 'Not saved') + ' — ' + pendingOps.length + ' change(s) waiting, will retry');
     retryTimer = setTimeout(saveNow, 30000);
@@ -1131,7 +1161,7 @@ async function refreshFromRemote() {
     adopt(remote); lsSet(LSK.data, DATA);
     await Promise.all([...S.records.values()].map(r => ensureUpload(r.jsonUrl)));
     rebuild(); refreshViews(); syncState = 'synced'; setStoreStatus();
-  } catch (e) { syncState = 'error'; setStoreStatus('Could not reach OneDrive — showing last saved copy'); }
+  } catch (e) { if (e.needsSignIn) return; syncState = 'error'; setStoreStatus('Could not reach OneDrive — showing last saved copy'); }
 }
 
 /* ----- documents you added (index JSON stored in OneDrive) ----- */
@@ -1148,6 +1178,10 @@ function setStoreStatus(msg) {
   const b = $('#authbtn');
   let cls = '', txt;
   if (!msalApp) { txt = msg || 'Microsoft sign-in unavailable — saving in this browser only'; b.hidden = true; }
+  else if (account && needsSignIn) {
+    txt = msg || 'Sign-in needs renewing — tap Sign in again to sync';
+    b.hidden = false; b.textContent = 'Sign in again'; b.onclick = signIn;
+  }
   else if (!account) {
     txt = msg || (pendingOps.length ? `${pendingOps.length} change(s) saved in this browser — sign in to sync` : 'Not signed in — searching works; sign in to save to OneDrive');
     b.hidden = false; b.textContent = 'Sign in with Microsoft'; b.onclick = signIn;
@@ -1161,14 +1195,17 @@ function setStoreStatus(msg) {
   $('#dbdot').className = 'dot ' + cls; $('#dbtxt').textContent = txt;
 }
 
+const authStart = initAuth().catch(e => { console.error(e); msalApp = null; });
 async function connectStore() {
   adopt(applyOps(lsGet(LSK.data, { records: {}, searches: [] }), []));
   pendingOps = lsGet(LSK.ops, []);
   rebuild(); refreshViews();
-  try { await initAuth(); }
-  catch (e) { console.error(e); msalApp = null; setStoreStatus(); return; }
+  await authStart;
   setStoreStatus();
-  if (!account) return;
+  if (msalApp && account) await startSync();
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refreshFromRemote(); });
+}
+async function startSync() {
   try {
     const remote = await fetchRemote();
     adopt(applyOps(remote, pendingOps)); lsSet(LSK.data, DATA);
@@ -1176,11 +1213,16 @@ async function connectStore() {
     rebuild(); refreshViews();
     if (pendingOps.length) saveNow(); else { syncState = 'synced'; setStoreStatus(); }
   } catch (e) {
+    if (e.needsSignIn) return;
     console.error(e); syncState = 'error';
     setStoreStatus(e.status === 401 || e.status === 403 ? 'OneDrive refused access — sign out and in again' : 'Could not reach OneDrive — showing last saved copy');
   }
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refreshFromRemote(); });
 }
+// Home: inside the dashboard, close the frame like its Menu button; otherwise go to the dashboard.
+document.getElementById('homebtn').addEventListener('click', e => {
+  if (!EMBEDDED) return;
+  try { const back = window.parent.document.getElementById('backBtn'); if (back) { e.preventDefault(); back.click(); } } catch (err) { /* different site: follow the link */ }
+});
 function refreshViews() {
   $('#savedn').textContent = S.searches.length || '';
   if (!$('#v-library').hidden) renderLibrary();
