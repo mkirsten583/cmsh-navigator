@@ -972,12 +972,12 @@ async function revert(code) {
 }
 
 /* ================= OneDrive storage (Microsoft Graph) =================
-   Same Azure app registration as Action Tracker. The client ID is not a secret.
+   Azure app registration: CMSH Navigator. The client ID is not a secret.
    Data lives in OneDrive:  /CMSH Navigator/cmsh-navigator-data.json   (verifications, saved searches)
                             /CMSH Navigator/documents/                 (documents you add: index JSON + PDF)
    ===================================================================== */
 const CONFIG = {
-  clientId: '3eeffa6d-8645-4792-b9ea-fddf1ead0ca6',
+  clientId: '05ddd0d6-958a-4762-b2c9-b60e17fd23d1',
   folder: 'CMSH Navigator',
 };
 const SCOPES = ['User.Read', 'Files.ReadWrite'];
