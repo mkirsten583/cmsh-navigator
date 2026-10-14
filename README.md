@@ -26,7 +26,7 @@ Runs entirely in the browser (GitHub Pages). Your own data is stored in OneDrive
 
 ## Home screen and sign-in
 
-- **Home** (top right) returns to the home dashboard. When the app is open inside the dashboard it closes the app view, like the dashboard's own Menu button; opened on its own it goes to `https://mkirsten583.github.io/home-dashboard/`.
+- **Home** (top right) takes you back to the start screen: clears the search and filters, closes any open clause and returns to the Search tab.
 - Sign-in is remembered in the browser. Inside the dashboard, Microsoft's sign-in page can't load in the embedded view, so **Sign in with Microsoft** opens a small pop-up window instead (allow pop-ups for mkirsten583.github.io if the browser asks). If the sign-in ever needs renewing while embedded, the status line shows **Sign in again** rather than leaving the page.
 
 ## Where your data goes

@@ -232,7 +232,7 @@ tr:last-child td { border-bottom: 0; }
     <div class="brand">
       <h1>CMSH Navigator</h1>
       <span class="sub">Queensland coal mining legislation, recognised standards and guidance</span>
-      <span class="status" id="status"><span class="dot" id="dbdot"></span><span id="dbtxt">Loading…</span><button class="btn sm" id="authbtn" hidden></button><a class="btn sm" id="homebtn" href="https://mkirsten583.github.io/home-dashboard/" target="_top" title="Back to the home screen">&#8962; Home</a></span>
+      <span class="status" id="status"><span class="dot" id="dbdot"></span><span id="dbtxt">Loading…</span><button class="btn sm" id="authbtn" hidden></button><button class="btn sm" id="homebtn" title="Back to the start screen">&#8962; Home</button></span>
     </div>
     <form class="qrow" id="qform" autocomplete="off">
       <label class="qbox" for="q">
@@ -531,7 +531,7 @@ function renderResults() {
   if (!S.query) {
     const tries = ['Who must review the respirable dust monitoring program?', 'Effective temperature limits underground', 'Sealed area gas monitoring frequency', 'Critical controls in a principal hazard management plan', 'Hydraulic hose assembly inspection', 'Emergency exercise frequency', 'Drug and alcohol testing criteria', 'section 89 regulation'];
     el.innerHTML = `<div class="empty"><h3>Ask about an obligation, hazard or provision</h3>
-      <p>Type a question in plain words. Results rank the best-matching clauses across the standards, guidance notes and (once loaded) the Act and Regulation. The panel above the results suggests the legislative sections those clauses rely on.</p>
+      <p>Type a question in plain words. Results rank the best-matching clauses across the Act, the Regulation, the recognised standards and the guidance notes. The panel above the results suggests the legislative sections those clauses rely on.</p>
       <p class="muted">You can also type a provision directly, such as <span class="mono">s 62 Act</span>, <span class="mono">CMSHR s 89</span> or <span class="mono">RS14</span>.</p>
       <div class="tries">${tries.map(t => `<button class="ref" data-try="${esc(t)}">${esc(t)}</button>`).join('')}</div></div>`;
     renderReaderHome();
@@ -1221,11 +1221,7 @@ async function startSync() {
     setStoreStatus(e.status === 401 || e.status === 403 ? 'OneDrive refused access — sign out and in again' : 'Could not reach OneDrive — showing last saved copy');
   }
 }
-// Home: inside the dashboard, close the frame like its Menu button; otherwise go to the dashboard.
-document.getElementById('homebtn').addEventListener('click', e => {
-  if (!EMBEDDED) return;
-  try { const back = window.parent.document.getElementById('backBtn'); if (back) { e.preventDefault(); back.click(); } } catch (err) { /* different site: follow the link */ }
-});
+
 function refreshViews() {
   $('#savedn').textContent = S.searches.length || '';
   if (!$('#v-library').hidden) renderLibrary();
@@ -1433,6 +1429,19 @@ async function exportPdf() {
   finally { btn.disabled = false; }
 }
 
+/* ================= home: back to the start screen ================= */
+function goHome() {
+  S.query = ''; S.results = []; S.current = null; S.re = null; S.pdfOpen = false;
+  S.filter = 'all'; S.docFilter = '';
+  $('#q').value = ''; $('#docsel').value = '';
+  document.querySelectorAll('.chipf').forEach(b => b.setAttribute('aria-pressed', b.dataset.f === 'all'));
+  showTab('search');
+  $('#split').classList.remove('reading');
+  renderResults();
+  $('#results').scrollTop = 0; $('#reader').scrollTop = 0;
+  try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { }
+}
+
 /* ================= tabs & events ================= */
 function showTab(name) {
   document.querySelectorAll('.tab').forEach(t => t.setAttribute('aria-selected', t.dataset.tab === name));
@@ -1475,6 +1484,7 @@ document.addEventListener('click', e => {
   if (t.id === 'rv-cancel') { S.pending = null; return renderReview(); }
   if (t.id === 'sv-save') return saveSearchForm();
   if (t.id === 'sv-cancel') { $('#saveform').innerHTML = ''; return; }
+  if (t.id === 'homebtn') return goHome();
   if (t.id === 'savebtn') return openSaveForm();
   if (t.id === 'pdfbtn') { S.pdfOpen = !S.pdfOpen; const h = $('#pdfpanel'); if (h) h.innerHTML = S.pdfOpen ? pdfPanelHtml(S.results.filter(r => passFilter(r.s)).length) : ''; return; }
   if (t.id === 'pdf-cancel') { S.pdfOpen = false; $('#pdfpanel').innerHTML = ''; return; }
