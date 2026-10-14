@@ -160,6 +160,9 @@
     const legal = info.type === 'act' || info.type === 'reg';
     const rep = repeatedLines(pages);
     const body = bodySize(pages);
+    // legislation: section headings sit at the left margin, body text is indented
+    const xs = pages.flat().map(l => l.x).sort((a, b) => a - b);
+    const leftEdge = legal ? xs[Math.floor(xs.length * 0.08)] || 0 : 0;
     const bigCount = new Map();
     pages.flat().forEach(l => { if (l.h >= body * 1.12) { const k = norm(l.t); bigCount.set(k, (bigCount.get(k) || 0) + 1); } });
     const sections = [];
@@ -176,11 +179,12 @@
         const t = l.t;
         if (legal && (m0 = t.match(PART_HEAD)) && t.length < 150 && !/[.;]$/.test(t)) {
           const lvl = m0[1].toLowerCase();
+          const sch = crumbs.schedNum ? { schedule: crumbs.schedule, schedNum: crumbs.schedNum } : {};
           if (lvl === 'chapter' && crumbs.chapter !== t) crumbs = { chapter: t };
-          else if (lvl === 'part' && crumbs.part !== t) crumbs = { chapter: crumbs.chapter, part: t };
-          else if (lvl === 'division' && crumbs.division !== t) crumbs = { chapter: crumbs.chapter, part: crumbs.part, division: t };
+          else if (lvl === 'part' && crumbs.part !== t) crumbs = Object.assign(sch.schedNum ? {} : { chapter: crumbs.chapter }, sch, { part: t });
+          else if (lvl === 'division' && crumbs.division !== t) crumbs = Object.assign(sch.schedNum ? {} : { chapter: crumbs.chapter }, sch, { part: crumbs.part, division: t });
           else if (lvl === 'subdivision') crumbs = Object.assign({}, crumbs, { subdivision: t });
-          else if (lvl === 'schedule' && crumbs.schedule !== t && !rep.has(norm(t))) { crumbs = { schedule: t }; start('sch' + m0[2], t, pi + 1, { crumbs: Object.assign({}, crumbs) }); }
+          else if (lvl === 'schedule' && crumbs.schedNum !== m0[2] && !rep.has(norm(t))) { crumbs = { schedule: t, schedNum: m0[2] }; start('sch' + m0[2], t, pi + 1, { crumbs: { schedule: t } }); }
           continue;
         }
         if (rep.has(norm(t))) continue;
@@ -191,11 +195,12 @@
         if (big && !legal && (bigCount.get(norm(t)) >= 3 || !/[A-Za-z]{3,}/.test(t))) continue;
         let m;
         if (legal) {
-          if ((m = t.match(LEG_HEAD)) && !/[.;,]$/.test(t) && (big || l.h >= body) && !/^\d+\s+(or|and|of|to|per|days?|months?|years?|hours?|minutes?|persons?|metres?|m|mm|km|kg|%)\b/i.test(t)) {
-            start(m[1], m[2], pi + 1, { crumbs: Object.assign({}, crumbs) });
+          if ((m = t.match(LEG_HEAD)) && !/[.;,]$/.test(t) && (big || l.h >= body * 0.95) && l.x <= leftEdge + 4 && !/^\d+\s+(or|and|of|to|per|days?|months?|years?|hours?|minutes?|persons?|metres?|m|mm|km|kg|%)\b/i.test(t)) {
+            const c = Object.assign({}, crumbs); delete c.schedNum; Object.keys(c).forEach(k => c[k] === undefined && delete c[k]);
+            start(crumbs.schedNum ? 'sch' + crumbs.schedNum + '-' + m[1] : m[1], m[2], pi + 1, { crumbs: c });
             continue;
           }
-        } else if (!big && (m = t.match(NUM_HEAD)) && t.length < 90 && !/[.,;:]$/.test(t) && +m[1].split('.')[0] <= 40 &&
+        } else if (!big && (m = t.match(NUM_HEAD)) && t.length < 90 && !/[.,;:]$/.test(t) && +m[1].split('.')[0] <= 40 && !/[≥≤%=<>·]|\bh\d{3}\b/i.test(m[2]) &&
                    (/^[A-Z0-9 ,&\/()\-–'’]{3,}$/.test(m[2]) || (opts.relaxed && m[2].split(' ').length <= 9 && !/^\d+\s/.test(t.slice(m[1].length + 1))))) {
           start(m[1].replace(/\.0$/, ''), m[2].charAt(0) + m[2].slice(1).toLowerCase().replace(/\b(shms|phmp|sop|cmsha|cmshr|sse|erz|rs|qgn|as|nzs|co|co2|ch4)\b/g, x => x.toUpperCase()), pi + 1);
           continue;
@@ -328,7 +333,7 @@
       if (used.has(sid)) sid += '~' + i;
       used.add(sid); s.sid = sid;
       s.refs = s.boiler ? [] : extractRefs(s.heading + '\n' + s.text, info);
-      if (!s.boiler && /Regulation\s*2001/.test(s.text)) cites2001 = true;
+      if (!legal && !s.boiler && /Regulation\s*2001/.test(s.text)) cites2001 = true;
     });
     return {
       id: info.code, code: info.code, type: info.type, num: info.num, title: info.title,

@@ -10,7 +10,7 @@ Runs entirely in the browser (GitHub Pages). Your own data is stored in OneDrive
 |---|---|
 | `index.html` | The app |
 | `parser.js` | Reads PDFs into sections and finds cross-references (used for documents you add) |
-| `docs.json` | The built-in index of 30 documents (RS1–RS16, RS18–RS23 except RS17, QGN9/15/22/26/32/35/36, VCD hatch seals guideline) |
+| `docs.json` | The built-in index of 33 documents: the Act (current as at 1 July 2026), the Regulation (current as at 1 September 2026), RS1–RS23, QGN9/15/22/26/32/35/36 and the VCD hatch seals guideline |
 | `pdfs/` | The source PDFs, so "Open PDF at page" works |
 | `icon-180.png` | Home-screen icon |
 
@@ -44,9 +44,9 @@ Before you sign in, saved searches and verifications are kept in that browser. T
 - **Library & versions**: version and date read from each PDF, status flags (over 5 years old, cites the repealed 2001 Regulation, newer version recorded), **Mark verified**, **Record newer version**, **Replace** and **Revert**.
 - **Saved searches**: save a question with a description and keywords; filter by keyword; re-run any time.
 
-## Adding the Act, Regulation and RS17
+## Adding or replacing documents
 
-Download the PDFs (legislation.qld.gov.au → the Act or Regulation → *Download* the current PDF; RS17 from RSHQ) and drop them on **Library & versions → Add a new document**. Check the detected details and save. They are stored in your OneDrive and appear on every device you sign in on.
+When RSHQ or legislation.qld.gov.au publishes a newer version, download the PDF and use **Replace** on that document in **Library & versions** (or **Add a new document** for something new). Check the detected details and save. Added documents are stored in your OneDrive and appear on every device you sign in on; the previous copy is kept so you can revert.
 
 ## Updating the built-in documents
 
