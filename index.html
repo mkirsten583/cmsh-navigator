@@ -828,7 +828,7 @@ function renderLibrary() {
     </div>
     <div class="drop" id="drop">
       <b>Add a new document</b> or a newer version of one you have. Drop PDFs here or <label class="btn sm" style="display:inline-flex"><input type="file" id="upfile" accept="application/pdf" multiple hidden>choose files</label>.
-      <div class="faint" style="font-size:12px;margin-top:4px">PDFs are read in your browser. The tool detects the document, its date, version and sections, and asks you to confirm before saving. ${account ? 'Added documents and their PDFs are stored in your OneDrive folder “' + esc(CONFIG.folder) + '/documents”.' : '<b>Sign in with Microsoft to add documents.</b> They are stored in your OneDrive.'}</div>
+      <div class="faint" style="font-size:12px;margin-top:4px">PDFs are read in your browser. The tool detects the document, its date, version and sections, and asks you to confirm before saving. ${account ? 'Added documents and their PDFs are stored in your OneDrive folder “' + esc(CONFIG.folder.split('/').join(' › ')) + ' › documents”.' : '<b>Sign in with Microsoft to add documents.</b> They are stored in your OneDrive.'}</div>
     </div>
     <div id="review"></div>
     <div class="tbl-wrap" style="margin-top:14px"><table>
@@ -978,12 +978,14 @@ async function revert(code) {
 
 /* ================= OneDrive storage (Microsoft Graph) =================
    Azure app registration: CMSH Navigator. The client ID is not a secret.
-   Data lives in OneDrive:  /CMSH Navigator/cmsh-navigator-data.json   (verifications, saved searches)
-                            /CMSH Navigator/documents/                 (documents you add: index JSON + PDF)
+   Data lives in OneDrive:  marc.kirsten/Browser Tools/Legislation/cmsh-navigator-data.json   (verifications, saved searches)
+                            marc.kirsten/Browser Tools/Legislation/documents/                 (documents you add: index JSON + PDF)
+                            marc.kirsten/Browser Tools/Legislation/reports/                   (PDF reports saved to OneDrive)
    ===================================================================== */
 const CONFIG = {
   clientId: '05ddd0d6-958a-4762-b2c9-b60e17fd23d1',
-  folder: 'CMSH Navigator',
+  // OneDrive folder, relative to the top of OneDrive (C:\\Users\\Marc.Kirsten\\OneDrive\\...)
+  folder: 'marc.kirsten/Browser Tools/Legislation',
 };
 const SCOPES = ['User.Read', 'Files.ReadWrite'];
 const GRAPH = 'https://graph.microsoft.com/v1.0';
@@ -1088,7 +1090,7 @@ async function graphError(r) {
   const err = new Error(msg); err.status = r.status; return err;
 }
 async function graphJson(path, opts) { const r = await graph(path, opts); if (!r.ok) throw await graphError(r); return r.status === 204 ? null : r.json(); }
-function pathRef(rel) { return '/me/drive/root:/' + [CONFIG.folder].concat(rel.split('/')).map(encodeURIComponent).join('/'); }
+function pathRef(rel) { return '/me/drive/root:/' + CONFIG.folder.split('/').concat(rel.split('/')).filter(Boolean).map(encodeURIComponent).join('/'); }
 async function downloadItem(meta) {
   try { const r = await fetch(meta['@microsoft.graph.downloadUrl'], { cache: 'no-store' }); if (!r.ok) throw new Error('download ' + r.status); return await r.text(); }
   catch (e) { const r = await graph('/me/drive/items/' + meta.id + '/content', { cache: 'no-store' }); if (!r.ok) throw await graphError(r); return r.text(); }
@@ -1408,7 +1410,7 @@ function pdfCanSaveToCloud() { return !!(account && !needsSignIn); }
 async function deliverPdf(blob, filename, opts) {
   const notes = [];
   if (opts && opts.od && pdfCanSaveToCloud()) {
-    try { await uploadFile(blob, 'reports/' + filename); notes.push('copy saved to OneDrive › ' + CONFIG.folder + ' › reports'); }
+    try { await uploadFile(blob, 'reports/' + filename); notes.push('copy saved to OneDrive › ' + CONFIG.folder.split('/').join(' › ') + ' › reports'); }
     catch (e) { console.error(e); notes.push('could not save the OneDrive copy'); }
   }
   const url = URL.createObjectURL(blob);

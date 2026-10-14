@@ -31,14 +31,16 @@ Runs entirely in the browser (GitHub Pages). Your own data is stored in OneDrive
 
 ## Where your data goes
 
-On first save the app creates a folder in your OneDrive:
+Everything is kept in your OneDrive folder `marc.kirsten\Browser Tools\Legislation` (on your PC: `C:\Users\Marc.Kirsten\OneDrive\marc.kirsten\Browser Tools\Legislation`). The app creates anything missing on first save:
 
 ```
-OneDrive/CMSH Navigator/
+OneDrive/marc.kirsten/Browser Tools/Legislation/
   cmsh-navigator-data.json   verification dates, "newer version" flags, saved searches
   documents/                 documents you add or replace (index .json + original .pdf)
   reports/                   PDF reports you choose to save to OneDrive
 ```
+
+To use a different folder, change `folder` in the CONFIG block near the top of the script in `index.html`.
 
 Before you sign in, saved searches and verifications are kept in that browser. They move into OneDrive the first time you sign in.
 
@@ -49,7 +51,7 @@ Before you sign in, saved searches and verifications are kept in that browser. T
 - **Cross-reference map**: every Act and Regulation section cited across the library, with the citing documents.
 - **Library & versions**: version and date read from each PDF, status flags (over 5 years old, cites the repealed 2001 Regulation, newer version recorded), **Mark verified**, **Record newer version**, **Replace** and **Revert**.
 - **Saved searches**: save a question with a description and keywords; filter by keyword; re-run any time.
-- **Export PDF**: from any search (or the **PDF** button on a saved search) create a PDF report: the question, filters, date and library versions, the legislation the results rely on, and each matching clause with its source, version and page. Choose how many results and whether to include the full clause text. When signed in, a copy can also be saved to `OneDrive/CMSH Navigator/reports/`.
+- **Export PDF**: from any search (or the **PDF** button on a saved search) create a PDF report: the question, filters, date and library versions, the legislation the results rely on, and each matching clause with its source, version and page. Choose how many results and whether to include the full clause text. When signed in, a copy can also be saved to `Browser Tools/Legislation/reports/` in OneDrive.
 
 ## Adding or replacing documents
 
