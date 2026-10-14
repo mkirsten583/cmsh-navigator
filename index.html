@@ -542,7 +542,8 @@ function renderResults() {
   const leg = suggestedLegislation(res);
   const docs = suggestedDocs(res);
   el.innerHTML = `
-    <div class="rhead"><span class="count">${res.length ? `${res.length} matching sections` : 'No matching sections'}</span><span class="sp"></span>${S.filter !== 'all' || S.docFilter ? '<button class="btn ghost sm" data-clearfilter>Clear filters</button>' : ''}</div>
+    <div class="rhead"><span class="count">${res.length ? `${res.length} matching sections` : 'No matching sections'}</span><span class="sp"></span>${res.length ? '<button class="btn sm" id="pdfbtn" title="Create a PDF report of these results">Export PDF</button>' : ''}${S.filter !== 'all' || S.docFilter ? '<button class="btn ghost sm" data-clearfilter>Clear filters</button>' : ''}</div>
+    <div id="pdfpanel">${S.pdfOpen ? pdfPanelHtml(res.length) : ''}</div>
     ${leg.length ? `<div class="suggest"><h3>Legislation these results rely on</h3><div class="reflist">${leg.map(a => refButton(a.k, a.from.size > 1 ? a.from.size + ' sources' : [...a.from][0])).join('')}</div></div>` : ''}
     ${docs.length ? `<div class="suggest"><h3>Most relevant documents</h3><div class="reflist">${docs.map(c => refButton(S.docs.get(c)?.type === 'rs' ? 'rs:' + S.docs.get(c).num : S.docs.get(c)?.type === 'qgn' ? 'qgn:' + S.docs.get(c).num : c + ':')).join('')}</div></div>` : ''}
     ${res.length ? '' : `<div class="empty"><p>Nothing matched. Try fewer or different words, or clear the document filter.</p></div>`}
@@ -1279,10 +1280,155 @@ function renderSaved() {
       ${s.description ? `<div class="d">${esc(s.description)}</div>` : ''}
       <div class="kw">${(s.keywords || []).map(k => `<button class="kwchip" data-kw="${esc(k.toLowerCase())}" aria-pressed="${savedFilter.kw === k.toLowerCase()}">${esc(k)}</button>`).join('')}</div>
       ${s.results?.length ? `<div class="snap">Top results when saved: ${s.results.slice(0, 4).map(r => `<button class="mini" data-sid="${esc(r.sid)}" title="${esc(r.heading)}">${esc(r.label)}</button>`).join(' ')}</div>` : ''}
-      <div class="row" style="margin-top:8px"><button class="btn sm primary" data-run="${esc(s.id)}">Run search</button><button class="btn sm" data-edit="${esc(s.id)}">Edit</button><button class="btn sm ghost danger" data-del="${esc(s.id)}">Delete</button><span class="faint" style="font-size:12px;margin-left:auto">Saved ${fmtDate((s.createdAt || '').slice(0, 10))}${s.filter && s.filter !== 'all' ? ' · filter: ' + esc(s.filter) : ''}${s.docFilter ? ' · ' + esc(s.docFilter) : ''}</span></div>
+      <div class="row" style="margin-top:8px"><button class="btn sm primary" data-run="${esc(s.id)}">Run search</button><button class="btn sm" data-pdfsaved="${esc(s.id)}">PDF</button><button class="btn sm" data-edit="${esc(s.id)}">Edit</button><button class="btn sm ghost danger" data-del="${esc(s.id)}">Delete</button><span class="faint" style="font-size:12px;margin-left:auto">Saved ${fmtDate((s.createdAt || '').slice(0, 10))}${s.filter && s.filter !== 'all' ? ' · filter: ' + esc(s.filter) : ''}${s.docFilter ? ' · ' + esc(s.docFilter) : ''}</span></div>
       <div data-delconfirm="${esc(s.id)}"></div>
     </div>`).join('') || (all.length ? '<p class="muted">No saved searches match.</p>' : `<div class="empty"><h3>No saved searches yet</h3><p>Run a search, then choose <b>Save search</b> to keep it with a description and keywords.</p></div>`)}</div>`;
   $('#savedn').textContent = all.length || '';
+}
+
+/* ================= PDF report of search results ================= */
+let jspdfReady = null;
+function loadJsPdf() {
+  if (window.jspdf) return Promise.resolve(window.jspdf);
+  if (jspdfReady) return jspdfReady;
+  jspdfReady = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js'; sc.onload = () => res(window.jspdf); sc.onerror = () => { jspdfReady = null; rej(new Error('Could not load the PDF library. Check your internet connection.')); }; document.head.appendChild(sc); });
+  return jspdfReady;
+}
+const FILTER_NAMES = { all: 'Everything', leg: 'Act & Regulation', rs: 'Recognised standards', gn: 'Guidance notes & guidelines' };
+function pdfPanelHtml(n) {
+  const o = S.pdfOpts || (S.pdfOpts = { count: 20, full: false, leg: true, od: true });
+  const counts = [10, 20, 40].filter(c => c < n).concat([n]).filter((c, i, a) => a.indexOf(c) === i);
+  if (!counts.includes(o.count)) o.count = counts.find(c => c >= o.count) || counts[counts.length - 1];
+  return `<div class="box" style="margin-bottom:10px"><h3>Export these results as a PDF</h3>
+    <div class="row" style="gap:14px;margin-bottom:8px">
+      <label class="muted" style="font-size:13px">Results <select id="pdf-count" class="sel" style="height:32px;width:auto">${counts.map(c => `<option value="${c}"${c === o.count ? ' selected' : ''}>${c === n ? 'All ' + c : 'Top ' + c}</option>`).join('')}</select></label>
+      <label style="font-size:13px"><input type="checkbox" id="pdf-full"${o.full ? ' checked' : ''}> Full clause text (not just extracts)</label>
+      <label style="font-size:13px"><input type="checkbox" id="pdf-leg"${o.leg ? ' checked' : ''}> Legislation summary</label>
+      ${typeof pdfCanSaveToCloud === 'function' && pdfCanSaveToCloud() ? `<label style="font-size:13px"><input type="checkbox" id="pdf-od"${o.od ? ' checked' : ''}> Also save to OneDrive</label>` : ''}
+    </div>
+    <div class="row"><button class="btn primary sm" id="pdf-go">Create PDF</button><button class="btn ghost sm" id="pdf-cancel">Cancel</button><span class="faint" id="pdf-msg" style="font-size:12.5px"></span></div></div>`;
+}
+function pdfText(str) {
+  // Built-in PDF fonts cover Western European characters only; swap the rest for plain equivalents.
+  const map = { '≥': '>=', '≤': '<=', '·': '.', '×': 'x', '−': '-', '‐': '-', '‑': '-', '→': '->', '←': '<-', '≈': '~', '°': ' deg', 'µ': 'u', 'μ': 'u', ' ': ' ', '​': '', '': '-', '▪': '-', '◦': '-', '': '-', '✓': 'Y', '✗': 'X' };
+  return String(str || '').replace(/[^\x20-\x7e\xa1-\xff€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ\n]/g, ch => map[ch] ?? (ch === '°' ? 'deg' : '?')).replace(/\?{2,}/g, '?');
+}
+function plainSnippet(text, re, len) { return snippet(text, re, len).replace(/<[^>]+>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&'); }
+function hexRgb(h) { const m = h.replace('#', ''); return [parseInt(m.slice(0, 2), 16), parseInt(m.slice(2, 4), 16), parseInt(m.slice(4, 6), 16)]; }
+async function buildResultsPdf(opts) {
+  const { jsPDF } = await loadJsPdf();
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  const W = 210, H = 297, M = 18, CW = W - 2 * M;
+  const INK = hexRgb('#17212b'), MUTED = hexRgb('#59656f'), ACC = hexRgb('#c2410c'), LINE = hexRgb('#d9dfe4');
+  const TYPE_RGB = { act: '#1d5d8a', reg: '#5a4a99', rs: '#8a5600', qgn: '#2e6a3b', guideline: '#75513a', other: '#5e6973' };
+  let y = M;
+  const color = c => doc.setTextColor(c[0], c[1], c[2]);
+  const ensure = h => { if (y + h > H - M - 8) { doc.addPage(); y = M; } };
+  const para = (str, { size = 10, style = 'normal', font = 'helvetica', c = INK, gap = 1.2, indent = 0, lh = 0.42 } = {}) => {
+    doc.setFont(font, style); doc.setFontSize(size); color(c);
+    const lines = doc.splitTextToSize(pdfText(str), CW - indent);
+    const step = size * lh;
+    for (const ln of lines) { ensure(step); doc.text(ln, M + indent, y + step * 0.8); y += step; }
+    y += gap;
+  };
+  const rule = () => { ensure(4); doc.setDrawColor(LINE[0], LINE[1], LINE[2]); doc.setLineWidth(0.3); doc.line(M, y, W - M, y); y += 4; };
+  const heading = str => { ensure(14); y += 2; doc.setFont('helvetica', 'bold'); doc.setFontSize(9); color(MUTED); doc.text(pdfText(str.toUpperCase()), M, y + 3, { charSpace: 0.3 }); y += 6; };
+
+  const res = S.results.filter(r => passFilter(r.s)).slice(0, opts.count);
+  const now = new Date();
+  // title block
+  doc.setFillColor(ACC[0], ACC[1], ACC[2]); doc.rect(M, y, 3, 16, 'F');
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(18); color(INK); doc.text('Search results', M + 7, y + 7);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); color(MUTED);
+  doc.text(pdfText('CMSH Navigator · Queensland coal mining legislation, recognised standards and guidance'), M + 7, y + 13);
+  y += 22;
+  para(S.query, { size: 14, style: 'bold', gap: 2 });
+  const act = S.docs.get('CMSHA'), reg = S.docs.get('CMSHR');
+  const meta = [
+    'Generated ' + now.toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' }) + ' at ' + now.toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' }),
+    'Showing ' + res.length + ' of ' + S.results.filter(r => passFilter(r.s)).length + ' matching sections · Filter: ' + (FILTER_NAMES[S.filter] || 'Everything') + (S.docFilter ? ' · Document: ' + S.docFilter : ''),
+    'Library: ' + S.docs.size + ' documents' + (act ? ' · Act current as at ' + fmtDate(act.issued) : '') + (reg ? ' · Regulation current as at ' + fmtDate(reg.issued) : ''),
+  ];
+  meta.forEach(m => para(m, { size: 9, c: MUTED, gap: 0.4 }));
+  y += 2; rule();
+
+  if (opts.leg) {
+    const leg = suggestedLegislation(res);
+    if (leg.length) {
+      heading('Legislation these results rely on');
+      leg.forEach(a => {
+        const r = resolve(a.k);
+        const line = labelKey(a.k) + (r.section ? ' — ' + r.section.heading : '') + '   (' + (a.from.size > 1 ? a.from.size + ' sources' : [...a.from][0]) + ')';
+        para(line, { size: 9.5, gap: 0.6, indent: 2 });
+      });
+      y += 2; rule();
+    }
+  }
+
+  heading('Matching clauses');
+  res.forEach((r, i) => {
+    const s = r.s, d = s.doc, legal = d.type === 'act' || d.type === 'reg';
+    ensure(22);
+    const tc = hexRgb(TYPE_RGB[d.type] || '#5e6973');
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); color(tc);
+    const tag = (i + 1) + '.  ' + d.code + (s.num ? (legal ? ' s ' : ' §') + s.num : '');
+    doc.text(pdfText(tag), M, y + 3.5);
+    y += 5;
+    para(s.heading, { size: 11.5, style: 'bold', gap: 0.6 });
+    const bits = [d.title]; if (d.version) bits.push('Version ' + d.version); if (d.issued) bits.push(fmtDate(d.issued, d.issuedExact)); bits.push('page ' + s.page);
+    if (s.crumbs) { const cr = Object.values(s.crumbs).filter(Boolean); if (cr.length) bits.push(cr.join(' › ')); }
+    para(bits.join(' · '), { size: 8.5, c: MUTED, gap: 1.4 });
+    if (opts.full) s.text.split('\n').forEach(pg => para(pg, { size: 9.5, font: 'times', gap: 0.8, indent: /^(•|▪|–|-\s|\(\w{1,4}\)|o\s)/.test(pg) ? 5 : 0, lh: 0.45 }));
+    else para(plainSnippet(s.text, S.re, 420), { size: 9.5, font: 'times', gap: 1, lh: 0.45 });
+    const cites = s.refs.filter(k => /^(act|reg|reg2001|rs|qgn):/.test(k)).map(labelKey);
+    if (cites.length) para('Cites: ' + cites.join(', '), { size: 8.5, c: MUTED, gap: 0.4 });
+    const src = legal ? LEG_URL[d.type] + '#sec.' + s.num : d.official;
+    if (src) para('Source: ' + src, { size: 8, c: MUTED, gap: 0.4 });
+    y += 3; if (i < res.length - 1) rule();
+  });
+  y += 4; ensure(16); rule();
+  para('Generated from the documents held in CMSH Navigator. Check each document is the current version on the official source before relying on it. This report is not legal advice.', { size: 8.5, c: MUTED });
+
+  // footers
+  const pages = doc.getNumberOfPages();
+  for (let i = 1; i <= pages; i++) {
+    doc.setPage(i); doc.setFont('helvetica', 'normal'); doc.setFontSize(8); color(MUTED);
+    const q = pdfText(S.query.length > 80 ? S.query.slice(0, 78) + '…' : S.query);
+    doc.text('CMSH Navigator · ' + q, M, H - 10);
+    doc.text('Page ' + i + ' of ' + pages, W - M, H - 10, { align: 'right' });
+  }
+  return doc.output('blob');
+}
+function pdfFilename() {
+  const slug = S.query.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 50) || 'search';
+  const d = new Date(); const stamp = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  return `CMSH search - ${slug} - ${stamp}.pdf`;
+}
+function pdfCanSaveToCloud() { return !!(account && !needsSignIn); }
+async function deliverPdf(blob, filename, opts) {
+  const notes = [];
+  if (opts && opts.od && pdfCanSaveToCloud()) {
+    try { await uploadFile(blob, 'reports/' + filename); notes.push('copy saved to OneDrive › ' + CONFIG.folder + ' › reports'); }
+    catch (e) { console.error(e); notes.push('could not save the OneDrive copy'); }
+  }
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = filename; a.rel = 'noopener';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+  return 'PDF downloaded' + (notes.length ? ' · ' + notes.join(' · ') : '');
+}
+async function exportPdf() {
+  const o = S.pdfOpts;
+  o.count = +($('#pdf-count')?.value || o.count); o.full = !!$('#pdf-full')?.checked; o.leg = !!$('#pdf-leg')?.checked; o.od = !!$('#pdf-od')?.checked;
+  const btn = $('#pdf-go'), msg = $('#pdf-msg');
+  btn.disabled = true; msg.textContent = 'Creating PDF…';
+  try {
+    const blob = await buildResultsPdf(o);
+    const out = await deliverPdf(blob, pdfFilename(), o);
+    msg.textContent = out || 'PDF created';
+    toast(out || 'PDF created');
+  } catch (e) { console.error(e); msg.textContent = e.message || 'Could not create the PDF'; }
+  finally { btn.disabled = false; }
 }
 
 /* ================= tabs & events ================= */
@@ -1328,6 +1474,10 @@ document.addEventListener('click', e => {
   if (t.id === 'sv-save') return saveSearchForm();
   if (t.id === 'sv-cancel') { $('#saveform').innerHTML = ''; return; }
   if (t.id === 'savebtn') return openSaveForm();
+  if (t.id === 'pdfbtn') { S.pdfOpen = !S.pdfOpen; const h = $('#pdfpanel'); if (h) h.innerHTML = S.pdfOpen ? pdfPanelHtml(S.results.filter(r => passFilter(r.s)).length) : ''; return; }
+  if (t.id === 'pdf-cancel') { S.pdfOpen = false; $('#pdfpanel').innerHTML = ''; return; }
+  if (t.id === 'pdf-go') return exportPdf();
+  if (ds.pdfsaved) { const sv = S.searches.find(x => x.id === ds.pdfsaved); if (!sv) return; S.filter = sv.filter || 'all'; S.docFilter = S.docs.has(sv.docFilter) ? sv.docFilter : ''; $('#docsel').value = S.docFilter; document.querySelectorAll('.chipf').forEach(b => b.setAttribute('aria-pressed', b.dataset.f === S.filter)); S.pdfOpen = true; return runSearch(sv.query); }
 });
 document.addEventListener('change', e => {
   const t = e.target;
