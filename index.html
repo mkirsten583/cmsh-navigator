@@ -257,6 +257,10 @@ tr:last-child td { border-bottom: 0; }
     <button class="chipf" data-f="leg" aria-pressed="false">Act &amp; Regulation</button>
     <button class="chipf" data-f="rs" aria-pressed="false">Recognised standards</button>
     <button class="chipf" data-f="gn" aria-pressed="false">Guidance notes &amp; guidelines</button>
+    <span class="faint" style="font-size:12px;margin-left:10px" title="How strictly the words in your question must match">Match</span>
+    <button class="chipf" data-m="best" aria-pressed="true" title="Rank clauses by how well they match, including related terms">Best match</button>
+    <button class="chipf" data-m="all" aria-pressed="false" title="Only clauses that contain every word in your question">All words</button>
+    <button class="chipf" data-m="phrase" aria-pressed="false" title="Only clauses that contain your words together, in order">Exact phrase</button>
     <span class="sp"></span>
     <span class="faint" id="corpus" style="font-size:12px"></span>
   </div>
@@ -291,7 +295,7 @@ const S = {
   sections: [], bySid: new Map(), cited: new Map(),
   idf: new Map(), avgLen: 1, N: 0,
   searches: [],
-  filter: 'all', docFilter: '', query: '', results: [], current: null,
+  filter: 'all', docFilter: '', match: 'best', query: '', results: [], current: null,
   db: null, assets: null, store: 'loading',
   pending: null, // upload in review
 };
@@ -406,7 +410,7 @@ function rebuild() {
       if (S.bySid.has(sec.sid)) sec.sid = sec.sid + '~' + d.code;
       const toks = tokens(s.heading).concat(tokens(s.heading), tokens(s.heading), tokens(s.text));
       const tf = new Map(); toks.forEach(t => tf.set(t, (tf.get(t) || 0) + 1));
-      sec.tf = tf; sec.len = toks.length; sec.lower = (s.heading + ' ' + s.text).toLowerCase();
+      sec.tf = tf; sec.len = toks.length; sec.lower = (s.heading + ' ' + s.text).toLowerCase(); sec.flat = ' ' + normPhrase(sec.lower) + ' ';
       if (!s.boiler) tf.forEach((_, t) => df.set(t, (df.get(t) || 0) + 1));
       S.sections.push(sec); S.bySid.set(sec.sid, sec);
       if (!s.boiler) for (const k of s.refs) { if (!S.cited.has(k)) S.cited.set(k, []); S.cited.get(k).push(sec); }
@@ -447,7 +451,18 @@ function explicitRefs(q) {
   (q.match(/\bQGN\s?0?(\d{1,2})\b/gi) || []).forEach(x => keys.add('qgn:' + +x.replace(/\D/g, '')));
   return [...keys];
 }
+const MATCH_NAMES = { best: 'Best match', all: 'All words', phrase: 'Exact phrase' };
+function normPhrase(t) { return String(t).toLowerCase().replace(/[’']/g, '').replace(/[^a-z0-9]+/g, ' ').trim(); }
+function setMatch(m) {
+  S.match = MATCH_NAMES[m] ? m : 'best';
+  document.querySelectorAll('.chipf[data-m]').forEach(b => b.setAttribute('aria-pressed', b.dataset.m === S.match));
+  try { localStorage.setItem('cmsh.match', S.match); } catch (e) { }
+}
 function search(q) {
+  // words in "quotes" must always appear together; the Match setting can require all words or the whole phrase
+  const phrases = [...String(q).matchAll(/["“”]([^"“”]+)["“”]/g)].map(m => normPhrase(m[1])).filter(Boolean);
+  if (S.match === 'phrase' && !phrases.length) { const whole = normPhrase(String(q).replace(/["“”]/g, '')); if (whole) phrases.push(whole); }
+  const needAll = S.match === 'all';
   const qt = [...new Set(tokens(q))];
   const exp = new Map();
   qt.forEach(t => exp.set(t, Math.max(exp.get(t) || 0, 1)));
@@ -462,8 +477,11 @@ function search(q) {
   const out = [];
   for (const s of S.sections) {
     if (s.boiler || !passFilter(s)) continue;
+    if (phrases.length && !phrases.every(ph => s.flat.includes(' ' + ph + ' '))) continue;
+    if (needAll && !qt.every(t => s.tf.has(t))) continue;
     let score = 0, hit = 0;
     exp.forEach((w, t) => { const f = s.tf.get(t); if (!f) return; hit += w >= 1 ? 1 : 0; const idf = S.idf.get(t) || 0; score += w * idf * (f * (k1 + 1)) / (f + k1 * (1 - b + b * s.len / S.avgLen)); });
+    if (!score && phrases.length) score = 0.01;
     if (!score && !refKeys.length) continue;
     // coverage: reward sections matching more of the distinct question terms
     if (qt.length > 1) score *= 0.6 + 0.4 * (hit / qt.length);
@@ -542,11 +560,11 @@ function renderResults() {
   const leg = suggestedLegislation(res);
   const docs = suggestedDocs(res);
   el.innerHTML = `
-    <div class="rhead"><span class="count">${res.length ? `${res.length} matching sections` : 'No matching sections'}</span><span class="sp"></span>${res.length ? '<button class="btn sm" id="pdfbtn" title="Create a PDF report of these results">Export PDF</button>' : ''}${S.filter !== 'all' || S.docFilter ? '<button class="btn ghost sm" data-clearfilter>Clear filters</button>' : ''}</div>
+    <div class="rhead"><span class="count">${res.length ? `${res.length} matching sections` : 'No matching sections'}${S.match !== 'best' ? ` · ${MATCH_NAMES[S.match].toLowerCase()}` : ''}</span><span class="sp"></span>${res.length ? '<button class="btn sm" id="pdfbtn" title="Create a PDF report of these results">Export PDF</button>' : ''}${S.filter !== 'all' || S.docFilter ? '<button class="btn ghost sm" data-clearfilter>Clear filters</button>' : ''}</div>
     <div id="pdfpanel">${S.pdfOpen ? pdfPanelHtml(res.length) : ''}</div>
     ${leg.length ? `<div class="suggest"><h3>Legislation these results rely on</h3><div class="reflist">${leg.map(a => refButton(a.k, a.from.size > 1 ? a.from.size + ' sources' : [...a.from][0])).join('')}</div></div>` : ''}
     ${docs.length ? `<div class="suggest"><h3>Most relevant documents</h3><div class="reflist">${docs.map(c => refButton(S.docs.get(c)?.type === 'rs' ? 'rs:' + S.docs.get(c).num : S.docs.get(c)?.type === 'qgn' ? 'qgn:' + S.docs.get(c).num : c + ':')).join('')}</div></div>` : ''}
-    ${res.length ? '' : `<div class="empty"><p>Nothing matched. Try fewer or different words, or clear the document filter.</p></div>`}
+    ${res.length ? '' : `<div class="empty"><p>${S.match !== 'best' ? `No clause contains ${S.match === 'all' ? 'every one of those words' : 'that exact phrase'}. <button class="btn sm" data-m="best">Switch to Best match</button> or try fewer words.` : 'Nothing matched. Try fewer or different words, or clear the document filter.'}</p></div>`}
     ${res.slice(0, 40).map(r => {
       const s = r.s; const t = typeClass(s.doc.type);
       const legRefs = s.refs.filter(k => /^(act|reg|reg2001|rs|qgn):/.test(k)).slice(0, 5);
@@ -1253,6 +1271,7 @@ async function saveSearchForm() {
   const q = $('#sv-q').value.trim(); if (!q) return;
   const kws = [...new Set($('#sv-k').value.split(',').map(k => k.trim()).filter(Boolean))];
   const rec = existing ? Object.assign({}, existing) : { id: 's' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), createdAt: new Date().toISOString(), filter: S.filter, docFilter: S.docFilter };
+  if (!existing || existing.query !== q) rec.match = S.match; else if (!rec.match) rec.match = S.match;
   rec.query = q; rec.description = $('#sv-d').value.trim(); rec.keywords = kws; rec.updatedAt = new Date().toISOString();
   if (!existing || existing.query !== q) {
     const r = search(q);
@@ -1278,7 +1297,7 @@ function renderSaved() {
       ${s.description ? `<div class="d">${esc(s.description)}</div>` : ''}
       <div class="kw">${(s.keywords || []).map(k => `<button class="kwchip" data-kw="${esc(k.toLowerCase())}" aria-pressed="${savedFilter.kw === k.toLowerCase()}">${esc(k)}</button>`).join('')}</div>
       ${s.results?.length ? `<div class="snap">Top results when saved: ${s.results.slice(0, 4).map(r => `<button class="mini" data-sid="${esc(r.sid)}" title="${esc(r.heading)}">${esc(r.label)}</button>`).join(' ')}</div>` : ''}
-      <div class="row" style="margin-top:8px"><button class="btn sm primary" data-run="${esc(s.id)}">Run search</button><button class="btn sm" data-pdfsaved="${esc(s.id)}">PDF</button><button class="btn sm" data-edit="${esc(s.id)}">Edit</button><button class="btn sm ghost danger" data-del="${esc(s.id)}">Delete</button><span class="faint" style="font-size:12px;margin-left:auto">Saved ${fmtDate((s.createdAt || '').slice(0, 10))}${s.filter && s.filter !== 'all' ? ' · filter: ' + esc(s.filter) : ''}${s.docFilter ? ' · ' + esc(s.docFilter) : ''}</span></div>
+      <div class="row" style="margin-top:8px"><button class="btn sm primary" data-run="${esc(s.id)}">Run search</button><button class="btn sm" data-pdfsaved="${esc(s.id)}">PDF</button><button class="btn sm" data-edit="${esc(s.id)}">Edit</button><button class="btn sm ghost danger" data-del="${esc(s.id)}">Delete</button><span class="faint" style="font-size:12px;margin-left:auto">Saved ${fmtDate((s.createdAt || '').slice(0, 10))}${s.filter && s.filter !== 'all' ? ' · filter: ' + esc(s.filter) : ''}${s.docFilter ? ' · ' + esc(s.docFilter) : ''}${s.match && s.match !== 'best' ? ' · ' + esc(MATCH_NAMES[s.match].toLowerCase()) : ''}</span></div>
       <div data-delconfirm="${esc(s.id)}"></div>
     </div>`).join('') || (all.length ? '<p class="muted">No saved searches match.</p>' : `<div class="empty"><h3>No saved searches yet</h3><p>Run a search, then choose <b>Save search</b> to keep it with a description and keywords.</p></div>`)}</div>`;
   $('#savedn').textContent = all.length || '';
@@ -1344,7 +1363,7 @@ async function buildResultsPdf(opts) {
   const act = S.docs.get('CMSHA'), reg = S.docs.get('CMSHR');
   const meta = [
     'Generated ' + now.toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' }) + ' at ' + now.toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' }),
-    'Showing ' + res.length + ' of ' + S.results.filter(r => passFilter(r.s)).length + ' matching sections · Filter: ' + (FILTER_NAMES[S.filter] || 'Everything') + (S.docFilter ? ' · Document: ' + S.docFilter : ''),
+    'Showing ' + res.length + ' of ' + S.results.filter(r => passFilter(r.s)).length + ' matching sections · Match: ' + (MATCH_NAMES[S.match] || 'Best match') + ' · Filter: ' + (FILTER_NAMES[S.filter] || 'Everything') + (S.docFilter ? ' · Document: ' + S.docFilter : ''),
     'Library: ' + S.docs.size + ' documents' + (act ? ' · Act current as at ' + fmtDate(act.issued) : '') + (reg ? ' · Regulation current as at ' + fmtDate(reg.issued) : ''),
   ];
   meta.forEach(m => para(m, { size: 9, c: MUTED, gap: 0.4 }));
@@ -1434,7 +1453,7 @@ function goHome() {
   S.query = ''; S.results = []; S.current = null; S.re = null; S.pdfOpen = false;
   S.filter = 'all'; S.docFilter = '';
   $('#q').value = ''; $('#docsel').value = '';
-  document.querySelectorAll('.chipf').forEach(b => b.setAttribute('aria-pressed', b.dataset.f === 'all'));
+  document.querySelectorAll('.chipf[data-f]').forEach(b => b.setAttribute('aria-pressed', b.dataset.f === 'all'));
   showTab('search');
   $('#split').classList.remove('reading');
   renderResults();
@@ -1458,8 +1477,9 @@ document.addEventListener('click', e => {
   if (ds.tab) return showTab(ds.tab);
   if (ds.tabGo) return showTab(ds.tabGo);
   if (ds.try) return runSearch(ds.try);
-  if (ds.f) { S.filter = ds.f; document.querySelectorAll('.chipf').forEach(b => b.setAttribute('aria-pressed', b.dataset.f === ds.f)); if (S.query) runSearch(S.query, { keepReader: true }); return; }
-  if (ds.clearfilter !== undefined) { S.filter = 'all'; S.docFilter = ''; $('#docsel').value = ''; document.querySelectorAll('.chipf').forEach(b => b.setAttribute('aria-pressed', b.dataset.f === 'all')); return runSearch(S.query, { keepReader: true }); }
+  if (ds.m) { setMatch(ds.m); if (S.query) runSearch(S.query, { keepReader: true }); return; }
+  if (ds.f) { S.filter = ds.f; document.querySelectorAll('.chipf[data-f]').forEach(b => b.setAttribute('aria-pressed', b.dataset.f === ds.f)); if (S.query) runSearch(S.query, { keepReader: true }); return; }
+  if (ds.clearfilter !== undefined) { S.filter = 'all'; S.docFilter = ''; $('#docsel').value = ''; document.querySelectorAll('.chipf[data-f]').forEach(b => b.setAttribute('aria-pressed', b.dataset.f === 'all')); return runSearch(S.query, { keepReader: true }); }
   if (ds.sid) { showTab('search'); return openSection(ds.sid); }
   if (ds.key) return openKey(ds.key);
   if (ds.doc) return openDoc(ds.doc);
@@ -1474,7 +1494,7 @@ document.addEventListener('click', e => {
   if (ds.savenewer) { const c = ds.savenewer; const rec = Object.assign({ code: c }, S.records.get(c) || {}, { newerDate: $('#ndate-' + CSS.escape(c)).value }); putRecord(c, rec).then(() => { renderLibrary(); toast('Recorded. Use Replace to add the newer file.'); }); return; }
   if (ds.clearnewer) { const c = ds.clearnewer; const rec = Object.assign({}, S.records.get(c) || {}); delete rec.newerDate; putRecord(c, rec).then(renderLibrary); return; }
   if (ds.dorevert) return revert(ds.dorevert);
-  if (ds.run) { const s = S.searches.find(x => x.id === ds.run); if (!s) return; S.filter = s.filter || 'all'; S.docFilter = S.docs.has(s.docFilter) ? s.docFilter : ''; $('#docsel').value = S.docFilter; document.querySelectorAll('.chipf').forEach(b => b.setAttribute('aria-pressed', b.dataset.f === S.filter)); return runSearch(s.query); }
+  if (ds.run) { const s = S.searches.find(x => x.id === ds.run); if (!s) return; S.filter = s.filter || 'all'; S.docFilter = S.docs.has(s.docFilter) ? s.docFilter : ''; $('#docsel').value = S.docFilter; document.querySelectorAll('.chipf[data-f]').forEach(b => b.setAttribute('aria-pressed', b.dataset.f === S.filter)); setMatch(s.match || 'best'); return runSearch(s.query); }
   if (ds.edit) return openSaveForm(S.searches.find(x => x.id === ds.edit));
   if (ds.del) { const h = document.querySelector(`[data-delconfirm="${CSS.escape(ds.del)}"]`); h.innerHTML = `<div class="inline"><span>Delete this saved search?</span><div class="row"><button class="btn sm danger" data-dodel="${esc(ds.del)}">Delete</button><button class="btn sm ghost" data-nodel="${esc(ds.del)}">Cancel</button></div></div>`; return; }
   if (ds.dodel) { delSearch(ds.dodel).then(() => { renderSaved(); toast('Deleted'); }); return; }
@@ -1489,7 +1509,7 @@ document.addEventListener('click', e => {
   if (t.id === 'pdfbtn') { S.pdfOpen = !S.pdfOpen; const h = $('#pdfpanel'); if (h) h.innerHTML = S.pdfOpen ? pdfPanelHtml(S.results.filter(r => passFilter(r.s)).length) : ''; return; }
   if (t.id === 'pdf-cancel') { S.pdfOpen = false; $('#pdfpanel').innerHTML = ''; return; }
   if (t.id === 'pdf-go') return exportPdf();
-  if (ds.pdfsaved) { const sv = S.searches.find(x => x.id === ds.pdfsaved); if (!sv) return; S.filter = sv.filter || 'all'; S.docFilter = S.docs.has(sv.docFilter) ? sv.docFilter : ''; $('#docsel').value = S.docFilter; document.querySelectorAll('.chipf').forEach(b => b.setAttribute('aria-pressed', b.dataset.f === S.filter)); S.pdfOpen = true; return runSearch(sv.query); }
+  if (ds.pdfsaved) { const sv = S.searches.find(x => x.id === ds.pdfsaved); if (!sv) return; S.filter = sv.filter || 'all'; S.docFilter = S.docs.has(sv.docFilter) ? sv.docFilter : ''; $('#docsel').value = S.docFilter; document.querySelectorAll('.chipf[data-f]').forEach(b => b.setAttribute('aria-pressed', b.dataset.f === S.filter)); S.pdfOpen = true; setMatch(sv.match || 'best'); return runSearch(sv.query); }
 });
 document.addEventListener('change', e => {
   const t = e.target;
@@ -1509,6 +1529,7 @@ $('#qform').addEventListener('submit', e => { e.preventDefault(); runSearch($('#
     S.base = await (await fetch('docs.json')).json();
   } catch (e) { $('#results').innerHTML = '<div class="empty"><h3>The document index failed to load.</h3><p>Reload the page to try again.</p></div>'; return; }
   rebuild();
+  try { setMatch(localStorage.getItem('cmsh.match') || 'best'); } catch (e) { setMatch('best'); }
   const h = decodeURIComponent(location.hash.slice(1));
   renderResults();
   if (h.startsWith('doc-')) openDoc(h.slice(4));

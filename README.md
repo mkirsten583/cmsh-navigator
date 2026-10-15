@@ -47,6 +47,7 @@ Before you sign in, saved searches and verifications are kept in that browser. T
 ## Using it
 
 - **Search**: type a question. Results rank matching clauses; the panel on top lists the Act/Regulation sections those clauses cite. Filter by Act & Regulation, standards, or guidance.
+- **Match**: next to the filters. **Best match** ranks clauses by relevance (including related terms such as SSE / site senior executive). **All words** only shows clauses containing every word in your question. **Exact phrase** only shows clauses containing your words together, in order. Words in "quotes" must always appear together, whichever setting is on. The setting is remembered, and saved searches keep the setting they were saved with.
 - **Reader**: references in the text are clickable. The side panel shows what the clause cites, what cites it, other documents relying on the same provisions, and similar wording elsewhere.
 - **Cross-reference map**: every Act and Regulation section cited across the library, with the citing documents.
 - **Library & versions**: version and date read from each PDF, status flags (over 5 years old, cites the repealed 2001 Regulation, newer version recorded), **Mark verified**, **Record newer version**, **Replace** and **Revert**.
