@@ -10,7 +10,7 @@ Runs entirely in the browser (GitHub Pages). Your own data is stored in OneDrive
 |---|---|
 | `index.html` | The app |
 | `parser.js` | Reads PDFs into sections and finds cross-references (used for documents you add) |
-| `docs.json` | The built-in index of 33 documents: the Act (current as at 1 July 2026), the Regulation (current as at 1 September 2026), RS1–RS23, QGN9/15/22/26/32/35/36 and the VCD hatch seals guideline |
+| `docs.json` | The built-in index of 34 documents: the Act (current as at 1 July 2026), the Regulation (current as at 1 September 2026), RS1–RS23, QGN9/15/22/26/32/35/36, the VCD hatch seals guideline and the RSHQ Compliance and Enforcement Policy (January 2025) |
 | `pdfs/` | The source PDFs, so "Open PDF at page" works |
 | `icon-180.png` | Home-screen icon |
 
@@ -46,7 +46,7 @@ Before you sign in, saved searches and verifications are kept in that browser. T
 
 ## Using it
 
-- **Search**: type a question. Results rank matching clauses; the panel on top lists the Act/Regulation sections those clauses cite. Filter by Act & Regulation, standards, or guidance.
+- **Search**: type a question. Results rank matching clauses; the panel on top lists the Act/Regulation sections those clauses cite. Filter by Act & Regulation, standards, or guidance & policies.
 - **Match**: next to the filters. **Best match** ranks clauses by relevance (including related terms such as SSE / site senior executive). **All words** only shows clauses containing every word in your question. **Exact phrase** only shows clauses containing your words together, in order. Words in "quotes" must always appear together, whichever setting is on. The setting is remembered, and saved searches keep the setting they were saved with.
 - **Reader**: references in the text are clickable. The side panel shows what the clause cites, what cites it, other documents relying on the same provisions, and similar wording elsewhere.
 - **Cross-reference map**: every Act and Regulation section cited across the library, with the citing documents.
@@ -56,7 +56,7 @@ Before you sign in, saved searches and verifications are kept in that browser. T
 
 ## Adding or replacing documents
 
-When RSHQ or legislation.qld.gov.au publishes a newer version, download the PDF and use **Replace** on that document in **Library & versions** (or **Add a new document** for something new). Check the detected details and save. Added documents are stored in your OneDrive and appear on every device you sign in on; the previous copy is kept so you can revert.
+When RSHQ or legislation.qld.gov.au publishes a newer version, download the PDF and use **Replace** on that document in **Library & versions** (or **Add a new document** for something new — any text-based PDF works, e.g. RSHQ policies, safety alerts, site procedures; set the type to *Policy / other* and give it a short code). Check the detected details and save. Added documents are stored in your OneDrive and appear on every device you sign in on; the previous copy is kept so you can revert.
 
 ## Updating the built-in documents
 

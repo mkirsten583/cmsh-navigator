@@ -256,7 +256,7 @@ tr:last-child td { border-bottom: 0; }
     <button class="chipf" data-f="all" aria-pressed="true">Everything</button>
     <button class="chipf" data-f="leg" aria-pressed="false">Act &amp; Regulation</button>
     <button class="chipf" data-f="rs" aria-pressed="false">Recognised standards</button>
-    <button class="chipf" data-f="gn" aria-pressed="false">Guidance notes &amp; guidelines</button>
+    <button class="chipf" data-f="gn" aria-pressed="false">Guidance &amp; policies</button>
     <span class="faint" style="font-size:12px;margin-left:10px" title="How strictly the words in your question must match">Match</span>
     <button class="chipf" data-m="best" aria-pressed="true" title="Rank clauses by how well they match, including related terms">Best match</button>
     <button class="chipf" data-m="all" aria-pressed="false" title="Only clauses that contain every word in your question">All words</button>
@@ -714,7 +714,7 @@ function openDoc(code) {
   setHash('doc-' + code);
 }
 function keySort(a, b) { const [pa, na] = splitKey(a[0]), [pb, nb] = splitKey(b[0]); return pa.localeCompare(pb) || parseInt(na) - parseInt(nb) || na.localeCompare(nb); }
-function typeName(t) { return { act: 'Act', reg: 'Regulation', rs: 'Recognised standard', qgn: 'Guidance note', guideline: 'Guideline', other: 'Document' }[t] || 'Document'; }
+function typeName(t) { return { act: 'Act', reg: 'Regulation', rs: 'Recognised standard', qgn: 'Guidance note', guideline: 'Guideline', other: 'Policy / other' }[t] || 'Document'; }
 function openMissing(key) {
   S.current = null;
   const [p, n] = splitKey(key);
@@ -1311,7 +1311,7 @@ function loadJsPdf() {
   jspdfReady = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js'; sc.onload = () => res(window.jspdf); sc.onerror = () => { jspdfReady = null; rej(new Error('Could not load the PDF library. Check your internet connection.')); }; document.head.appendChild(sc); });
   return jspdfReady;
 }
-const FILTER_NAMES = { all: 'Everything', leg: 'Act & Regulation', rs: 'Recognised standards', gn: 'Guidance notes & guidelines' };
+const FILTER_NAMES = { all: 'Everything', leg: 'Act & Regulation', rs: 'Recognised standards', gn: 'Guidance & policies' };
 function pdfPanelHtml(n) {
   const o = S.pdfOpts || (S.pdfOpts = { count: 20, full: false, leg: true, od: true });
   const counts = [10, 20, 40].filter(c => c < n).concat([n]).filter((c, i, a) => a.indexOf(c) === i);
